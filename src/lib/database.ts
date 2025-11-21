@@ -59,43 +59,30 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
 
 export async function createOrUpdateProfile(userId: string, email: string, fullName?: string): Promise<UserProfile | null> {
   try {
-    // Primeiro, verifica se o perfil já existe
-    const { data: existingProfile } = await supabase
+    // Usa upsert para criar ou atualizar em uma única operação
+    const { data, error } = await supabase
       .from('profiles')
-      .select('*')
-      .eq('id', userId)
+      .upsert(
+        {
+          id: userId,
+          email: email,
+          full_name: fullName || null,
+          updated_at: new Date().toISOString()
+        },
+        {
+          onConflict: 'id',
+          ignoreDuplicates: false
+        }
+      )
+      .select()
       .single()
 
-    if (existingProfile) {
-      // Se já existe, apenas atualiza o updated_at
-      const { data, error } = await supabase
-        .from('profiles')
-        .update({
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', userId)
-        .select()
-        .single()
-
-      if (error) throw error
-      return data
-    } else {
-      // Se não existe, cria novo perfil
-      const { data, error } = await supabase
-        .from('profiles')
-        .insert({
-          id: userId,
-          email,
-          full_name: fullName || null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .select()
-        .single()
-
-      if (error) throw error
-      return data
+    if (error) {
+      console.error('Erro detalhado ao criar/atualizar perfil:', error)
+      throw error
     }
+    
+    return data
   } catch (error) {
     console.error('Erro ao criar/atualizar perfil:', error)
     return null
